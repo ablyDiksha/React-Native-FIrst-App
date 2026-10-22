@@ -1,8 +1,7 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+
+import React, {useEffect, useMemo} from 'react';
 import {
   ActivityIndicator,
-  Image,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,199 +10,120 @@ import {
   View,
 } from 'react-native';
 
-export interface Product {
-  id: number;
-  title: string;
-  price: number;
-  description: string;
-  category: string;
-  image: string;
-  rating: {
-    rate: number;
-    count: number;
-  };
-}
+import {useProductStore} from '../../../../store/productStore';
 
 const HomeScreen = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const products = useProductStore(state => state.products);
+  const loading = useProductStore(state => state.loading);
+  const error = useProductStore(state => state.error);
+  const searchQuery = useProductStore(state => state.searchQuery);
+  const selectedCategory = useProductStore(
+    state => state.selectedCategory,
+  );
 
-  const fetchProducts = useCallback(async () => {
-    try {
-      setError(null);
-      const response = await fetch('https://fakestoreapi.com/products');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch products (${response.status})`);
-      }
-      const data: Product[] = await response.json();
-      setProducts(data);
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to load products';
-      setError(message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const fetchProducts = useProductStore(
+    state => state.fetchProducts,
+  );
+  const setSearchQuery = useProductStore(
+    state => state.setSearchQuery,
+  );
+  const setSelectedCategory = useProductStore(
+    state => state.setSelectedCategory,
+  );
+  const resetFilters = useProductStore(
+    state => state.resetFilters,
+  );
 
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchProducts();
-  }, [fetchProducts]);
-
-  const categories = useMemo(() => {
-    const unique = Array.from(new Set(products.map(p => p.category)));
-    return ['All', ...unique];
-  }, [products]);
+  const categories = useMemo(
+    () => [
+      'All',
+      ...new Set(products.map(product => product.category)),
+    ],
+    [products],
+  );
 
   const filteredProducts = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+
     return products.filter(product => {
       const matchesCategory =
-        selectedCategory === 'All' || product.category === selectedCategory;
+        selectedCategory === 'All' ||
+        product.category === selectedCategory;
+
       const matchesSearch =
-        product.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.category.toLowerCase().includes(searchQuery.toLowerCase());
+        product.title.toLowerCase().includes(query) ||
+        product.category.toLowerCase().includes(query);
+
       return matchesCategory && matchesSearch;
     });
-  }, [products, selectedCategory, searchQuery]);
+  }, [products, searchQuery, selectedCategory]);
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={['#315CEB']}
-          tintColor="#315CEB"
-        />
-      }>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Welcome back!</Text>
-          <Text style={styles.heading}>Find your Products</Text>
-        </View>
-        <TouchableOpacity style={styles.cartButton}>
-          <Text style={styles.cartText}>🛒</Text>
-        </TouchableOpacity>
-      </View>
+    <ScrollView style={{flex: 1, padding: 16}}>
+      <Text style={{fontSize: 24, fontWeight: 'bold'}}>
+        Find your Products
+      </Text>
 
-      {/* Search Bar */}
       <TextInput
-        style={styles.searchinput}
-        placeholder="Search for products..."
+        placeholder="Search products..."
         value={searchQuery}
         onChangeText={setSearchQuery}
-        clearButtonMode="while-editing"
+        style={{
+          backgroundColor: '#fff',
+          padding: 12,
+          marginVertical: 16,
+          borderRadius: 10,
+        }}
       />
 
-      {/* Categories */}
-      <Text style={styles.searchTitle}>Categories</Text>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {categories.map(category => {
-          const isSelected = selectedCategory === category;
-          const displayLabel =
-            category === 'All'
-              ? '✨ All'
-              : category === "men's clothing"
-              ? "👕 Men's"
-              : category === "women's clothing"
-              ? "👗 Women's"
-              : category === 'jewelery'
-              ? '💍 Jewelry'
-              : category === 'electronics'
-              ? '💻 Electronics'
-              : category.charAt(0).toUpperCase() + category.slice(1);
-
-          return (
-            <TouchableOpacity
-              key={category}
-              style={[
-                styles.category,
-                isSelected && styles.categorySelected,
-              ]}
-              onPress={() => setSelectedCategory(category)}>
-              <Text
-                style={[
-                  styles.categoryText,
-                  isSelected && styles.categoryTextSelected,
-                ]}>
-                {displayLabel}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      <ScrollView horizontal>
+        {categories.map(category => (
+          <TouchableOpacity
+            key={category}
+            onPress={() => setSelectedCategory(category)}
+            style={{padding: 10}}>
+            <Text>
+              {selectedCategory === category ? '✓ ' : ''}
+              {category}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
 
-      {/* Products Heading */}
-      <View style={styles.productHeader}>
-        <Text style={styles.searchTitle}>Products</Text>
-        <TouchableOpacity
-          onPress={() => {
-            setSelectedCategory('All');
-            setSearchQuery('');
-          }}>
-          <Text style={styles.seeAll}>See All</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity onPress={resetFilters}>
+        <Text style={{color: 'blue', marginVertical: 12}}>
+          See All
+        </Text>
+      </TouchableOpacity>
 
-      {/* Products List / State */}
       {loading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#315CEB" />
-          <Text style={styles.loadingText}>Loading products...</Text>
-        </View>
+        <ActivityIndicator size="large" />
       ) : error ? (
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+        <View>
+          <Text>{error}</Text>
+          <TouchableOpacity onPress={fetchProducts}>
+            <Text>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : filteredProducts.length === 0 ? (
-        <View style={styles.centerContainer}>
-          <Text style={styles.emptyText}>No products found.</Text>
-        </View>
+        <Text>No products found.</Text>
       ) : (
-        <View style={styles.productList}>
-          {filteredProducts.map(product => (
-            <View key={product.id} style={styles.productCard}>
-              <View style={styles.productImageContainer}>
-                <Image
-                  source={{uri: product.image}}
-                  style={styles.productImage}
-                  resizeMode="contain"
-                />
-              </View>
-              <Text style={styles.productName} numberOfLines={2}>
-                {product.title}
-              </Text>
-              <Text style={styles.productPrice}>
-                ${product.price.toFixed(2)}
-              </Text>
-              <TouchableOpacity style={styles.addButton}>
-                <Text style={styles.addButtonText}>Add to Cart</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
+        filteredProducts.map(product => (
+          <View key={product.id} style={{padding: 12}}>
+            <Text>{product.title}</Text>
+            <Text>${product.price.toFixed(2)}</Text>
+          </View>
+        ))
       )}
-
-      <View style={styles.bottomSpacer} />
     </ScrollView>
   );
 };
+
+export default HomeScreen;
 
 const styles = StyleSheet.create({
   container: {
@@ -366,4 +286,3 @@ const styles = StyleSheet.create({
   },
 });
 
-export default HomeScreen;

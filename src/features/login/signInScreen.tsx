@@ -1,6 +1,7 @@
 import React, {useState} from 'react';
 import {
   Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -38,6 +39,7 @@ const SignInScreen = ({navigation}: Props) => {
   };
 
   return (
+     <ScrollView horizontal>
     <View style={styles.container}>
       <Text style={styles.title}>Welcome Back!</Text>
       <Text style={styles.subtitle}>Sign in to continue</Text>
@@ -77,6 +79,7 @@ const SignInScreen = ({navigation}: Props) => {
         </TouchableOpacity>
       </View>
     </View>
+    </ScrollView>
   );
 };
 

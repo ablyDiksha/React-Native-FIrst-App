@@ -1,6 +1,10 @@
+import { Product } from '../types/product';
+
 export type RootStackParamList = {
-  Home: undefined;
   Signin: undefined;
+  Home: undefined;
+  ProductDetail: { product: Product };
+  Cart: undefined;
   Login: undefined;
   Profile: undefined;
 };

@@ -1,7 +1,8 @@
-
-import React, {useEffect, useMemo} from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,50 +10,52 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../../../navigation/types';
+import { useProductStore } from '../../../../store/productStore';
+import { useCartStore } from '../../../../store/cartStore';
+import { Product } from '../../../../types/product';
 
-import {useProductStore} from '../../../../store/productStore';
+type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
-const HomeScreen = () => {
+const HomeScreen = ({ navigation }: Props) => {
   const products = useProductStore(state => state.products);
   const loading = useProductStore(state => state.loading);
+  const refreshing = useProductStore(state => state.refreshing);
   const error = useProductStore(state => state.error);
   const searchQuery = useProductStore(state => state.searchQuery);
-  const selectedCategory = useProductStore(
-    state => state.selectedCategory,
-  );
+  const selectedCategory = useProductStore(state => state.selectedCategory);
 
-  const fetchProducts = useProductStore(
-    state => state.fetchProducts,
-  );
-  const setSearchQuery = useProductStore(
-    state => state.setSearchQuery,
-  );
+  const fetchProducts = useProductStore(state => state.fetchProducts);
+  const setSearchQuery = useProductStore(state => state.setSearchQuery);
   const setSelectedCategory = useProductStore(
     state => state.setSelectedCategory,
   );
-  const resetFilters = useProductStore(
-    state => state.resetFilters,
+  const resetFilters = useProductStore(state => state.resetFilters);
+
+  const addToCart = useCartStore(state => state.addToCart);
+  const totalCartCount = useCartStore(state =>
+    state.items.reduce((sum, item) => sum + item.quantity, 0),
   );
+
+  const [recentlyAddedId, setRecentlyAddedId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
 
-  const categories = useMemo(
-    () => [
-      'All',
-      ...new Set(products.map(product => product.category)),
-    ],
-    [products],
-  );
+  const categories = useMemo(() => {
+    const unique = Array.from(new Set(products.map(p => p.category)));
+    return ['All', ...unique];
+  }, [products]);
 
   const filteredProducts = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
 
     return products.filter(product => {
       const matchesCategory =
-        selectedCategory === 'All' ||
-        product.category === selectedCategory;
+        selectedCategory === 'All' || product.category === selectedCategory;
 
       const matchesSearch =
         product.title.toLowerCase().includes(query) ||
@@ -62,85 +65,211 @@ const HomeScreen = () => {
     });
   }, [products, searchQuery, selectedCategory]);
 
+  const handleAddToCart = (product: Product) => {
+    addToCart(product, 1);
+    setRecentlyAddedId(product.id);
+    setTimeout(() => {
+      setRecentlyAddedId(prev => (prev === product.id ? null : prev));
+    }, 1200);
+  };
+
+  const getCategoryLabel = (category: string) => {
+    switch (category) {
+      case 'All':
+        return '✨ All';
+      case "men's clothing":
+        return "👕 Men's";
+      case "women's clothing":
+        return "👗 Women's";
+      case 'jewelery':
+        return '💍 Jewelry';
+      case 'electronics':
+        return '💻 Electronics';
+      default:
+        return category.charAt(0).toUpperCase() + category.slice(1);
+    }
+  };
+
   return (
-    <ScrollView style={{flex: 1, padding: 16}}>
-      <Text style={{fontSize: 24, fontWeight: 'bold'}}>
-        Find your Products
-      </Text>
-
-      <TextInput
-        placeholder="Search products..."
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        style={{
-          backgroundColor: '#fff',
-          padding: 12,
-          marginVertical: 16,
-          borderRadius: 10,
-        }}
-      />
-
-      <ScrollView horizontal>
-        {categories.map(category => (
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView
+        style={styles.container}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchProducts(true)}
+            colors={['#315CEB']}
+            tintColor="#315CEB"
+          />
+        }
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Welcome back!</Text>
+            <Text style={styles.heading}>Find your Products</Text>
+          </View>
           <TouchableOpacity
-            key={category}
-            onPress={() => setSelectedCategory(category)}
-            style={{padding: 10}}>
-            <Text>
-              {selectedCategory === category ? '✓ ' : ''}
-              {category}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      <TouchableOpacity onPress={resetFilters}>
-        <Text style={{color: 'blue', marginVertical: 12}}>
-          See All
-        </Text>
-      </TouchableOpacity>
-
-      {loading ? (
-        <ActivityIndicator size="large" />
-      ) : error ? (
-        <View>
-          <Text>{error}</Text>
-          <TouchableOpacity onPress={fetchProducts}>
-            <Text>Retry</Text>
+            style={styles.cartButton}
+            onPress={() => navigation.navigate('Cart')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.cartText}>🛒</Text>
+            {totalCartCount > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>
+                  {totalCartCount > 99 ? '99+' : totalCartCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
-      ) : filteredProducts.length === 0 ? (
-        <Text>No products found.</Text>
-      ) : (
-        filteredProducts.map(product => (
-          <View key={product.id} style={{padding: 12}}>
-            <Text>{product.title}</Text>
-            <Text>${product.price.toFixed(2)}</Text>
+
+        {/* Search Input */}
+        <TextInput
+          style={styles.searchinput}
+          placeholder="Search for products..."
+          placeholderTextColor="#94A3B8"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          clearButtonMode="while-editing"
+        />
+
+        {/* Categories */}
+        <Text style={styles.sectionTitle}>Categories</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScroll}
+        >
+          {categories.map(category => {
+            const isSelected = selectedCategory === category;
+            return (
+              <TouchableOpacity
+                key={category}
+                style={[styles.category, isSelected && styles.categorySelected]}
+                onPress={() => setSelectedCategory(category)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.categoryText,
+                    isSelected && styles.categoryTextSelected,
+                  ]}
+                >
+                  {getCategoryLabel(category)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Products Header */}
+        <View style={styles.productHeader}>
+          <Text style={styles.sectionTitle}>Products</Text>
+          <TouchableOpacity onPress={resetFilters} activeOpacity={0.7}>
+            <Text style={styles.seeAll}>See All</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Product List Content */}
+        {loading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#315CEB" />
+            <Text style={styles.loadingText}>Loading products...</Text>
           </View>
-        ))
-      )}
-    </ScrollView>
+        ) : error ? (
+          <View style={styles.centerContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => fetchProducts()}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filteredProducts.length === 0 ? (
+          <View style={styles.centerContainer}>
+            <Text style={styles.emptyText}>No products found.</Text>
+          </View>
+        ) : (
+          <View style={styles.productList}>
+            {filteredProducts.map(product => {
+              const isAdded = recentlyAddedId === product.id;
+
+              return (
+                <TouchableOpacity
+                  key={product.id}
+                  style={styles.productCard}
+                  onPress={() =>
+                    navigation.navigate('ProductDetail', { product })
+                  }
+                  activeOpacity={0.9}
+                >
+                  <View style={styles.productImageContainer}>
+                    <Image
+                      source={{ uri: product.image }}
+                      style={styles.productImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+
+                  <View style={styles.productInfo}>
+                    <Text style={styles.productName} numberOfLines={2}>
+                      {product.title}
+                    </Text>
+                    <Text style={styles.productPrice}>
+                      ${product.price.toFixed(2)}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.addButton,
+                      isAdded && styles.addButtonSuccess,
+                    ]}
+                    onPress={() => handleAddToCart(product)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.addButtonText}>
+                      {isAdded ? '✓ Added' : 'Add to Cart'}
+                    </Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 export default HomeScreen;
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F5F6FA',
+  },
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#f5f6fa',
+    backgroundColor: '#F5F6FA',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 15,
+    marginTop: 10,
     marginBottom: 20,
   },
   greeting: {
     fontSize: 14,
-    color: '#777777',
+    color: '#64748B',
+    fontWeight: '500',
   },
   heading: {
     fontSize: 22,
@@ -149,55 +278,96 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cartButton: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 14,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   cartText: {
-    fontSize: 24,
+    fontSize: 22,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  cartBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
   searchinput: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingHorizontal: 15,
-    height: 50,
+    height: 48,
     fontSize: 15,
-    marginBottom: 25,
+    color: '#1E293B',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  searchTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#222222',
-    marginBottom: 15,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 12,
+  },
+  categoryScroll: {
+    paddingRight: 10,
+    marginBottom: 18,
   },
   category: {
-    backgroundColor: '#ffffff',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 9,
+    paddingHorizontal: 15,
     borderRadius: 12,
     marginRight: 10,
-    marginBottom: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   categorySelected: {
     backgroundColor: '#315CEB',
   },
   categoryText: {
-    color: '#333333',
-    fontWeight: '500',
-    fontSize: 14,
+    color: '#475569',
+    fontWeight: '600',
+    fontSize: 13,
   },
   categoryTextSelected: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   productHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 6,
   },
   seeAll: {
     color: '#315CEB',
-    marginBottom: 15,
+    fontWeight: '600',
+    fontSize: 14,
   },
   productList: {
     flexDirection: 'row',
@@ -206,32 +376,40 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   productCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     width: '48%',
     padding: 12,
-    borderRadius: 15,
-    marginBottom: 15,
+    borderRadius: 16,
+    marginBottom: 16,
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   productImageContainer: {
     height: 120,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
     padding: 6,
   },
   productImage: {
     width: '100%',
     height: '100%',
   },
+  productInfo: {
+    flex: 1,
+  },
   productName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#1E293B',
     marginBottom: 6,
-    minHeight: 36,
+    minHeight: 34,
   },
   productPrice: {
     fontSize: 16,
@@ -241,17 +419,20 @@ const styles = StyleSheet.create({
   },
   addButton: {
     backgroundColor: '#315CEB',
-    padding: 10,
-    borderRadius: 8,
+    paddingVertical: 9,
+    borderRadius: 10,
     alignItems: 'center',
   },
+  addButtonSuccess: {
+    backgroundColor: '#10B981',
+  },
   addButtonText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
   },
   centerContainer: {
-    paddingVertical: 40,
+    paddingVertical: 50,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -269,20 +450,19 @@ const styles = StyleSheet.create({
   retryButton: {
     backgroundColor: '#315CEB',
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: 14,
   },
   emptyText: {
     color: '#64748B',
     fontSize: 15,
   },
   bottomSpacer: {
-    height: 50,
+    height: 40,
   },
 });
-

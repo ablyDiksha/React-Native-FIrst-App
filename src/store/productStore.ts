@@ -1,6 +1,5 @@
-
-import {create} from 'zustand';
-import {Product} from '../types/product';
+import { create } from 'zustand';
+import { Product } from '../types/product';
 
 interface ProductState {
   products: Product[];
@@ -14,9 +13,10 @@ interface ProductState {
   setSearchQuery: (query: string) => void;
   setSelectedCategory: (category: string) => void;
   resetFilters: () => void;
+  getProductById: (id: number) => Product | undefined;
 }
 
-export const useProductStore = create<ProductState>((set) => ({
+export const useProductStore = create<ProductState>((set, get) => ({
   // State
   products: [],
   loading: true,
@@ -29,18 +29,14 @@ export const useProductStore = create<ProductState>((set) => ({
   fetchProducts: async (isRefresh = false) => {
     set({
       error: null,
-      ...(isRefresh ? {refreshing: true} : {loading: true}),
+      ...(isRefresh ? { refreshing: true } : { loading: true }),
     });
 
     try {
-      const response = await fetch(
-        'https://fakestoreapi.com/products',
-      );
+      const response = await fetch('https://fakestoreapi.com/products');
 
       if (!response.ok) {
-        throw new Error(
-          `Failed to fetch products (${response.status})`,
-        );
+        throw new Error(`Failed to fetch products (${response.status})`);
       }
 
       const data: Product[] = await response.json();
@@ -51,11 +47,9 @@ export const useProductStore = create<ProductState>((set) => ({
       });
     } catch (err: unknown) {
       const message =
-        err instanceof Error
-          ? err.message
-          : 'Failed to load products';
+        err instanceof Error ? err.message : 'Failed to load products';
 
-      set({error: message});
+      set({ error: message });
     } finally {
       set({
         loading: false,
@@ -65,13 +59,13 @@ export const useProductStore = create<ProductState>((set) => ({
   },
 
   // Update search text
-  setSearchQuery: (query) => {
-    set({searchQuery: query});
+  setSearchQuery: query => {
+    set({ searchQuery: query });
   },
 
   // Select a category
-  setSelectedCategory: (category) => {
-    set({selectedCategory: category});
+  setSelectedCategory: category => {
+    set({ selectedCategory: category });
   },
 
   // Reset search and category filters
@@ -80,5 +74,10 @@ export const useProductStore = create<ProductState>((set) => ({
       searchQuery: '',
       selectedCategory: 'All',
     });
+  },
+
+  // Retrieve single product by id
+  getProductById: (id: number) => {
+    return get().products.find(product => product.id === id);
   },
 }));
